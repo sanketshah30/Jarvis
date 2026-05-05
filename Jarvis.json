@@ -1,0 +1,596 @@
+{
+  "name": "Jarvis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-org-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0735507c-dafc-48a4-b5fc-963c5cc3aa27",
+      "name": "Webhook Trigger (text)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1340, 370],
+      "webhookId": "ai-org-webhook-text"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-ai-org/transcribe",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "id": "43c2ad5d-f9f3-4ee7-911d-28e40b4264b3",
+      "name": "Voice Webhook (audio upload)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1560, 120],
+      "webhookId": "ai-org-webhook-voice"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $credentials.openAiApi.apiKey }}" }]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            { "parameterType": "formBinaryData", "name": "file" },
+            { "name": "model", "value": "whisper-1" },
+            { "name": "language", "value": "en" },
+            { "name": "response_format", "value": "json" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5929b262-94a0-40a1-967b-058536b587d8",
+      "name": "Whisper Transcription",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1340, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ transcript: $json.text, status: 'ok' }) }}",
+        "options": {}
+      },
+      "id": "0fe5c693-a844-4a2f-8214-6208eae8e525",
+      "name": "Return Transcript to UI",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-1120, 420]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fromVoice = $input.first().json.text !== undefined;\nconst mission = fromVoice\n  ? $input.first().json.text\n  : ($input.first().json.body?.mission || $input.first().json.mission || '');\nreturn [{ json: { mission, source: fromVoice ? 'voice' : 'webhook' } }];"
+      },
+      "id": "0a1dd942-9046-4ddc-a1f4-b0b221bf3a7a",
+      "name": "Normalise Mission Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1120, 220]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.mission }}",
+        "options": {
+          "systemMessage": "You are Alex Prime, the CEO Agent of an AI organisation. Your job is to:\n1. Understand the incoming mission or task.\n2. Decide which executive agents to delegate to: CTO, COO, and/or CMO.\n3. Return ONLY a raw JSON object. No markdown. No backticks. No explanation.\n\nThe route field MUST always be a JSON array, even if only one value.\n\nExample output:\n{\n  \"route\": [\"CTO\", \"CMO\"],\n  \"cto_task\": \"Build an API integration spec\",\n  \"coo_task\": null,\n  \"cmo_task\": \"Write launch announcement copy\",\n  \"summary\": \"We need both technical implementation and marketing comms.\"\n}\n\nIf only one department is needed:\n{\n  \"route\": [\"CTO\"],\n  \"cto_task\": \"Build the claims API\",\n  \"coo_task\": null,\n  \"cmo_task\": null,\n  \"summary\": \"This is a technical task only.\"\n}"
+        }
+      },
+      "id": "95d45079-e569-475f-89b5-fc3ad9d9d402",
+      "name": "CEO Agent (Alex Prime)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-900, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output || '{}';\nlet parsed;\nconst cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  parsed = { route: [], summary: raw };\n}\nif (!parsed.route) {\n  parsed.route = [];\n} else if (typeof parsed.route === 'string') {\n  parsed.route = parsed.route.split(',').map(s => s.trim());\n}\nreturn [{ json: parsed }];"
+      },
+      "id": "e2d45d2a-a2e7-45e1-a2c8-2b0aa5ee8245",
+      "name": "Parse CEO Routing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-524, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 1 },
+          "conditions": [{ "id": "cto-condition", "leftValue": "={{ $json.route }}", "rightValue": "CTO", "operator": { "type": "array", "operation": "contains", "rightType": "any" } }],
+          "combinator": "and"
+        },
+        "options": { "looseTypeValidation": true }
+      },
+      "id": "857d6792-1674-434a-811d-9ef41b106221",
+      "name": "Route to CTO?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-304, -380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 1 },
+          "conditions": [{ "id": "coo-condition", "leftValue": "={{ $json.route }}", "rightValue": "COO", "operator": { "type": "array", "operation": "contains", "rightType": "any" } }],
+          "combinator": "and"
+        },
+        "options": { "looseTypeValidation": true }
+      },
+      "id": "489e4d96-1b72-43c6-a607-97bc8377f68f",
+      "name": "Route to COO?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-304, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 1 },
+          "conditions": [{ "id": "cmo-condition", "leftValue": "={{ $json.route }}", "rightValue": "CMO", "operator": { "type": "array", "operation": "contains", "rightType": "any" } }],
+          "combinator": "and"
+        },
+        "options": { "looseTypeValidation": true }
+      },
+      "id": "50c9354f-1ff5-43ef-9c73-f8c698877fa7",
+      "name": "Route to CMO?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-304, 520]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Parse CEO Routing').item.json.cto_task }}",
+        "options": {
+          "systemMessage": "You are Nova Circuit, the CTO Agent. You receive a technical task from the CEO Agent and you:\n1. Break it into an engineering sub-task and a data/analytics sub-task.\n2. Return structured JSON:\n{\n  \"eng_task\": \"...\",\n  \"data_task\": \"...\",\n  \"tech_summary\": \"...\"\n}\nReturn valid JSON only. No markdown. No backticks."
+        }
+      },
+      "id": "a8890199-9d77-4cb1-a763-386d90e92ea7",
+      "name": "CTO Agent (Nova Circuit)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-84, -480]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Parse CEO Routing').item.json.coo_task }}",
+        "options": {
+          "systemMessage": "You are Sage Ops, the COO Agent. You receive an operational task from the CEO Agent and determine what the Sales & CRM Agent should do. Return structured JSON:\n{\n  \"sales_task\": \"...\",\n  \"ops_summary\": \"...\"\n}\nReturn valid JSON only. No markdown. No backticks."
+        }
+      },
+      "id": "629b54c6-80b3-4ef2-997b-5ad4228c7367",
+      "name": "COO Agent (Sage Ops)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-84, 20]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Parse CEO Routing').item.json.cmo_task }}",
+        "options": {
+          "systemMessage": "You are Luna Reach, the CMO Agent. You receive a marketing task from the CEO Agent and break it into content and growth sub-tasks. Return structured JSON:\n{\n  \"content_task\": \"...\",\n  \"growth_task\": \"...\",\n  \"marketing_summary\": \"...\"\n}\nReturn valid JSON only. No markdown. No backticks."
+        }
+      },
+      "id": "dc6a3bca-2bc5-4bbc-8084-5d13e1b6f818",
+      "name": "CMO Agent (Luna Reach)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [-84, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FIX: strip Gemini markdown fences before parsing\nconst raw = $input.first().json.output || '{}';\nconst cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  parsed = { eng_task: raw };\n}\nconst result = {};\nif (parsed.eng_task && String(parsed.eng_task).trim()) result.eng_task = parsed.eng_task;\nif (parsed.data_task && String(parsed.data_task).trim()) result.data_task = parsed.data_task;\nif (parsed.tech_summary) result.tech_summary = parsed.tech_summary;\nreturn [{ json: result }];"
+      },
+      "id": "7b547a60-0ccc-44a4-9d76-c82e27a45eb2",
+      "name": "Parse CTO Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [292, -380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FIX: strip Gemini markdown fences before parsing\nconst raw = $input.first().json.output || '{}';\nconst cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  parsed = { sales_task: raw };\n}\nconst result = {};\nif (parsed.sales_task && String(parsed.sales_task).trim()) result.sales_task = parsed.sales_task;\nif (parsed.ops_summary) result.ops_summary = parsed.ops_summary;\nreturn [{ json: result }];"
+      },
+      "id": "bf98cadf-91d5-469d-a6e9-25a7ec903f04",
+      "name": "Parse COO Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [292, 120]
+    },
+    {
+      "parameters": {
+        "jsCode": "// FIX: strip Gemini markdown fences before parsing\nconst raw = $input.first().json.output || '{}';\nconst cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch(e) {\n  parsed = { content_task: raw };\n}\nconst result = {};\nif (parsed.content_task && String(parsed.content_task).trim()) result.content_task = parsed.content_task;\nif (parsed.growth_task && String(parsed.growth_task).trim()) result.growth_task = parsed.growth_task;\nif (parsed.marketing_summary) result.marketing_summary = parsed.marketing_summary;\nreturn [{ json: result }];"
+      },
+      "id": "2e5f7bb1-9de6-412a-8b11-71dfe13496a5",
+      "name": "Parse CMO Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [292, 520]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "2c7603cc", "leftValue": "={{ $json.eng_task }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2d82ae9e-f3d2-47e4-9fec-18f0f8ef1504",
+      "name": "Eng Task?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [512, -480]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "1c9e86c9", "leftValue": "={{ $json.data_task }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1087d75-6792-4e71-9198-21043c9827f9",
+      "name": "Data Task?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [512, -280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "2a1d81bf", "leftValue": "={{ $json.sales_task }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "65fc2607-a9aa-42a2-ab97-db45d470b8db",
+      "name": "Sales Task?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [512, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "a0cb4521", "leftValue": "={{ $json.content_task }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3c1f4d50-ad84-4597-af8a-6bee33d7cfe1",
+      "name": "Content Task?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [512, 520]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [{ "id": "76d35569", "leftValue": "={{ $json.growth_task }}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty", "singleValue": true } }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "76d35569-3ff8-4750-99db-ddc2df36bc92",
+      "name": "Growth Task?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [512, 720]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.eng_task }}",
+        "options": {
+          "systemMessage": "You are Volt Build, the Engineering Lead Agent. You receive engineering tasks and:\n1. Write or describe the code/architecture needed.\n2. Create a Jira ticket summary.\n3. Note any blockers.\nFormat:\n**Code/Architecture:**\n<output>\n**Jira Summary:**\n<ticket>\n**Blockers:**\n<blockers or none>"
+        }
+      },
+      "id": "dc980223-c0ee-4282-828c-4a49b9f13313",
+      "name": "Engineering Agent (Volt Build)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [732, -480]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.data_task }}",
+        "options": {
+          "systemMessage": "You are Iris Analytics, the Data & AI Agent. You receive data tasks and describe the query, analysis, and KPIs needed.\nFormat:\n**Analysis Plan:**\n<plan>\n**Key Metrics:**\n<metrics>\n**Data Quality Notes:**\n<notes or none>"
+        }
+      },
+      "id": "5b6cd33b-039d-4dac-ae71-5650cb3ae0fc",
+      "name": "Data Agent (Iris Analytics)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [732, -280]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.sales_task }}",
+        "options": {
+          "systemMessage": "You are Rex Pipeline, the Sales & CRM Agent. You receive sales tasks and draft outreach, CRM updates, and pipeline actions.\nFormat:\n**Outreach Draft:**\n<email or action>\n**CRM Updates:**\n<fields>\n**Next Stage:**\n<action>"
+        }
+      },
+      "id": "2a1da039-2aef-41f6-8af0-32319232f31e",
+      "name": "Sales Agent (Rex Pipeline)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [732, 120]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.content_task }}",
+        "options": {
+          "systemMessage": "You are Pixel Story, the Content Agent. You write blog posts, social copy, and landing page text, with SEO recommendations.\nFormat:\n**Content:**\n<copy>\n**SEO Title:** <title>\n**Meta Description:** <description>\n**Distribution:** <channels>"
+        }
+      },
+      "id": "9756209b-ea38-4c19-b6e7-47e817b3e524",
+      "name": "Content Agent (Pixel Story)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [732, 520]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.growth_task }}",
+        "options": {
+          "systemMessage": "You are Flux Growth, the Growth & Ads Agent. You write ad copy variants, targeting parameters, and KPIs.\nFormat:\n**Ad Copy Variants:**\n<headline + desc x2>\n**Targeting:**\n<audience and channels>\n**KPIs:**\n<metrics>"
+        }
+      },
+      "id": "de85be37-9b54-4275-b8ff-9360c4acf5fb",
+      "name": "Growth Agent (Flux Growth)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [732, 720]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "id": "ade02d7d-b004-445d-926f-11154a7f2aff",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1108, -22]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst outputs = {\n  engineering: '(not activated)',\n  data: '(not activated)',\n  sales: '(not activated)',\n  content: '(not activated)',\n  growth: '(not activated)'\n};\n\nitems.forEach(item => {\n  const output = item.json.output || '';\n  if (!output) return;\n  const text = output.toLowerCase();\n  if (text.includes('code/architecture') || text.includes('jira') || text.includes('blockers')) {\n    outputs.engineering = output;\n  } else if (text.includes('analysis plan') || text.includes('key metrics') || text.includes('data quality')) {\n    outputs.data = output;\n  } else if (text.includes('outreach') || text.includes('crm updates') || text.includes('next stage')) {\n    outputs.sales = output;\n  } else if (text.includes('seo title') || text.includes('meta description') || text.includes('distribution')) {\n    outputs.content = output;\n  } else if (text.includes('ad copy') || text.includes('targeting') || text.includes('kpis')) {\n    outputs.growth = output;\n  }\n});\n\nreturn [{ json: {\n  outputs,\n  agents_responded: items.length,\n  timestamp: new Date().toISOString()\n} }];"
+      },
+      "id": "a17ccc5b-4b13-4c7b-871f-54933f8c9b3e",
+      "name": "CEO Aggregator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1328, -22]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "a69deb68-9139-44c1-acdf-314fa50c7136",
+      "name": "Send Final Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1548, -22]
+    },
+    {
+      "parameters": { "modelName": "models/gemini-2.5-flash-lite", "options": {} },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [820, -160],
+      "id": "6a5b40e6-7cd5-499c-8ace-bfb68946a02f",
+      "name": "Gemini IC Agent",
+      "credentials": { "googlePalmApi": { "id": "mkwFPlTCyeVzcrhd", "name": "Google Gemini(PaLM) Api Personal account" } }
+    },
+    {
+      "parameters": { "modelName": "models/gemini-2.5-flash-lite", "options": {} },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [4, -260],
+      "id": "dc4e7810-6561-4607-b619-f7d6729be4d8",
+      "name": "Gemini (CTO)",
+      "credentials": { "googlePalmApi": { "id": "mkwFPlTCyeVzcrhd", "name": "Google Gemini(PaLM) Api Personal account" } }
+    },
+    {
+      "parameters": { "modelName": "models/gemini-2.5-flash-lite", "options": {} },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [4, 240],
+      "id": "5e916813-874a-4629-96b8-defbda04bf7b",
+      "name": "Gemini COO",
+      "credentials": { "googlePalmApi": { "id": "mkwFPlTCyeVzcrhd", "name": "Google Gemini(PaLM) Api Personal account" } }
+    },
+    {
+      "parameters": { "modelName": "models/gemini-2.5-flash-lite", "options": {} },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [-812, 440],
+      "id": "5c086322-63e5-4fbb-92c1-7cd1219686fb",
+      "name": "Gemini CEO",
+      "credentials": { "googlePalmApi": { "id": "mkwFPlTCyeVzcrhd", "name": "Google Gemini(PaLM) Api Personal account" } }
+    },
+    {
+      "parameters": { "modelName": "models/gemini-2.5-flash-lite", "options": {} },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [4, 740],
+      "id": "c2e5c6c3-5b1b-4b4c-be3b-4b87c578bc44",
+      "name": "Gemini CMO",
+      "credentials": { "googlePalmApi": { "id": "mkwFPlTCyeVzcrhd", "name": "Google Gemini(PaLM) Api Personal account" } }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Voice Webhook (audio upload)": {
+      "main": [[{ "node": "Whisper Transcription", "type": "main", "index": 0 }]]
+    },
+    "Whisper Transcription": {
+      "main": [[
+        { "node": "Return Transcript to UI", "type": "main", "index": 0 },
+        { "node": "Normalise Mission Input", "type": "main", "index": 0 }
+      ]]
+    },
+    "Webhook Trigger (text)": {
+      "main": [[{ "node": "Normalise Mission Input", "type": "main", "index": 0 }]]
+    },
+    "Normalise Mission Input": {
+      "main": [[{ "node": "CEO Agent (Alex Prime)", "type": "main", "index": 0 }]]
+    },
+    "CEO Agent (Alex Prime)": {
+      "main": [[{ "node": "Parse CEO Routing", "type": "main", "index": 0 }]]
+    },
+    "Parse CEO Routing": {
+      "main": [[
+        { "node": "Route to CTO?", "type": "main", "index": 0 },
+        { "node": "Route to COO?", "type": "main", "index": 0 },
+        { "node": "Route to CMO?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Route to CTO?": {
+      "main": [
+        [{ "node": "CTO Agent (Nova Circuit)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Route to COO?": {
+      "main": [
+        [{ "node": "COO Agent (Sage Ops)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Route to CMO?": {
+      "main": [
+        [{ "node": "CMO Agent (Luna Reach)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "CTO Agent (Nova Circuit)": {
+      "main": [[{ "node": "Parse CTO Output", "type": "main", "index": 0 }]]
+    },
+    "COO Agent (Sage Ops)": {
+      "main": [[{ "node": "Parse COO Output", "type": "main", "index": 0 }]]
+    },
+    "CMO Agent (Luna Reach)": {
+      "main": [[{ "node": "Parse CMO Output", "type": "main", "index": 0 }]]
+    },
+    "Parse CTO Output": {
+      "main": [[
+        { "node": "Eng Task?", "type": "main", "index": 0 },
+        { "node": "Data Task?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Parse COO Output": {
+      "main": [[{ "node": "Sales Task?", "type": "main", "index": 0 }]]
+    },
+    "Parse CMO Output": {
+      "main": [[
+        { "node": "Content Task?", "type": "main", "index": 0 },
+        { "node": "Growth Task?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Eng Task?": {
+      "main": [
+        [{ "node": "Engineering Agent (Volt Build)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Data Task?": {
+      "main": [
+        [{ "node": "Data Agent (Iris Analytics)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Sales Task?": {
+      "main": [
+        [{ "node": "Sales Agent (Rex Pipeline)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Content Task?": {
+      "main": [
+        [{ "node": "Content Agent (Pixel Story)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Growth Task?": {
+      "main": [
+        [{ "node": "Growth Agent (Flux Growth)", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Engineering Agent (Volt Build)": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Data Agent (Iris Analytics)": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Sales Agent (Rex Pipeline)": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Content Agent (Pixel Story)": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Growth Agent (Flux Growth)": {
+      "main": [[{ "node": "Merge", "type": "main", "index": 0 }]]
+    },
+    "Merge": {
+      "main": [[{ "node": "CEO Aggregator", "type": "main", "index": 0 }]]
+    },
+    "CEO Aggregator": {
+      "main": [[{ "node": "Send Final Response", "type": "main", "index": 0 }]]
+    },
+    "Gemini IC Agent": {
+      "ai_languageModel": [[
+        { "node": "Engineering Agent (Volt Build)", "type": "ai_languageModel", "index": 0 },
+        { "node": "Data Agent (Iris Analytics)", "type": "ai_languageModel", "index": 0 },
+        { "node": "Sales Agent (Rex Pipeline)", "type": "ai_languageModel", "index": 0 },
+        { "node": "Content Agent (Pixel Story)", "type": "ai_languageModel", "index": 0 },
+        { "node": "Growth Agent (Flux Growth)", "type": "ai_languageModel", "index": 0 }
+      ]]
+    },
+    "Gemini (CTO)": {
+      "ai_languageModel": [[{ "node": "CTO Agent (Nova Circuit)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Gemini COO": {
+      "ai_languageModel": [[{ "node": "COO Agent (Sage Ops)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Gemini CEO": {
+      "ai_languageModel": [[{ "node": "CEO Agent (Alex Prime)", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Gemini CMO": {
+      "ai_languageModel": [[{ "node": "CMO Agent (Luna Reach)", "type": "ai_languageModel", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "versionId": "8936c43e-059e-4dc0-bbd8-10813017cf8f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3a45ec7bb633ec5e49aa945921691a3030bcfa7cf613898e8ce8aa82a50ae64"
+  },
+  "id": "0GnyPG2mzjGleqSP",
+  "tags": []
+}
