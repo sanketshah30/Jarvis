@@ -1,0 +1,92 @@
+{
+  "organization": "Jarvis",
+  "provider": "anthropic",
+  "credential_env_var": "ANTHROPIC_API_KEY",
+  "ceo": {
+    "id": "ceo",
+    "name": "Alex Prime",
+    "title": "CEO",
+    "prompt_file": "prompts/ceo.md",
+    "subordinates": ["cto", "coo", "cmo", "cfo"]
+  },
+  "executives": [
+    {
+      "id": "cto",
+      "name": "Nova Circuit",
+      "title": "CTO",
+      "prompt_file": "prompts/executives/cto.md",
+      "subordinates": ["engineering", "data"]
+    },
+    {
+      "id": "coo",
+      "name": "Sage Ops",
+      "title": "COO",
+      "prompt_file": "prompts/executives/coo.md",
+      "subordinates": ["sales"]
+    },
+    {
+      "id": "cmo",
+      "name": "Luna Reach",
+      "title": "CMO",
+      "prompt_file": "prompts/executives/cmo.md",
+      "subordinates": ["content", "growth"]
+    },
+    {
+      "id": "cfo",
+      "name": "Mira Ledger",
+      "title": "CFO",
+      "prompt_file": "prompts/executives/cfo.md",
+      "subordinates": ["fpa", "accounting", "treasury"]
+    }
+  ],
+  "specialists": [
+    {
+      "id": "engineering",
+      "name": "Volt Build",
+      "title": "Engineering Lead",
+      "prompt_file": "prompts/specialists/engineering.md"
+    },
+    {
+      "id": "data",
+      "name": "Iris Analytics",
+      "title": "Data Lead",
+      "prompt_file": "prompts/specialists/data.md"
+    },
+    {
+      "id": "sales",
+      "name": "Rex Pipeline",
+      "title": "Sales Lead",
+      "prompt_file": "prompts/specialists/sales.md"
+    },
+    {
+      "id": "content",
+      "name": "Pixel Story",
+      "title": "Content Lead",
+      "prompt_file": "prompts/specialists/content.md"
+    },
+    {
+      "id": "growth",
+      "name": "Flux Growth",
+      "title": "Growth Lead",
+      "prompt_file": "prompts/specialists/growth.md"
+    },
+    {
+      "id": "fpa",
+      "name": "Atlas Forecast",
+      "title": "FP&A Lead",
+      "prompt_file": "prompts/specialists/fpa.md"
+    },
+    {
+      "id": "accounting",
+      "name": "Tally Books",
+      "title": "Accounting Lead",
+      "prompt_file": "prompts/specialists/accounting.md"
+    },
+    {
+      "id": "treasury",
+      "name": "Vault Cash",
+      "title": "Treasury Lead",
+      "prompt_file": "prompts/specialists/treasury.md"
+    }
+  ]
+}
