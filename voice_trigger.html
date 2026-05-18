@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Org — Voice Command</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(139,92,246,0.5);
+    --text-primary: #e8e8f0;
+    --text-muted: #6b6b80;
+    --text-mono: #a0a0c0;
+    --accent: #8b5cf6;
+    --accent-soft: rgba(139,92,246,0.12);
+    --accent-glow: rgba(139,92,246,0.25);
+    --red: #ef4444;
+    --green: #10b981;
+    --amber: #f59e0b;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 540px;
+  }
+
+  .header {
+    margin-bottom: 3rem;
+  }
+
+  .org-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  h1 span {
+    color: var(--accent);
+  }
+
+  .subtitle {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 0.75rem;
+    line-height: 1.6;
+  }
+
+  /* Config panel */
+  .config-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .config-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .config-input {
+    width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.875rem;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-mono);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .config-input:focus {
+    border-color: var(--border-active);
+  }
+
+  /* Visualiser ring */
+  .mic-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2.5rem 0 2rem;
+  }
+
+  .ring-wrap {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.75rem;
+  }
+
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    transition: border-color 0.3s, transform 0.3s;
+  }
+
+  .ring-1 { inset: 0; animation: none; }
+  .ring-2 { inset: -16px; opacity: 0.4; }
+  .ring-3 { inset: -32px; opacity: 0.15; }
+
+  .ring-wrap.recording .ring-1 { border-color: var(--red); animation: pulse-ring 1.2s ease-in-out infinite; }
+  .ring-wrap.recording .ring-2 { border-color: var(--red); animation: pulse-ring 1.2s ease-in-out infinite 0.2s; }
+  .ring-wrap.recording .ring-3 { border-color: var(--red); animation: pulse-ring 1.2s ease-in-out infinite 0.4s; }
+
+  .ring-wrap.processing .ring-1 { border-color: var(--amber); animation: spin 2s linear infinite; }
+  .ring-wrap.processing .ring-2 { border-color: var(--amber); opacity: 0.3; }
+  .ring-wrap.processing .ring-3 { border-color: var(--amber); opacity: 0.1; }
+
+  .ring-wrap.done .ring-1 { border-color: var(--green); }
+  .ring-wrap.done .ring-2 { border-color: var(--green); }
+  .ring-wrap.done .ring-3 { border-color: var(--green); }
+
+  @keyframes pulse-ring {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.04); opacity: 0.7; }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Mic button */
+  .mic-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: none;
+    background: var(--surface);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    transition: background 0.2s, transform 0.15s;
+    outline: none;
+  }
+
+  .mic-btn:hover { background: rgba(139,92,246,0.15); transform: scale(1.05); }
+  .mic-btn:active { transform: scale(0.97); }
+
+  .mic-btn.recording {
+    background: rgba(239,68,68,0.15);
+  }
+
+  .mic-btn.processing {
+    background: rgba(245,158,11,0.1);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .mic-icon {
+    width: 28px;
+    height: 28px;
+    color: var(--text-muted);
+    transition: color 0.2s;
+  }
+
+  .mic-btn.recording .mic-icon { color: var(--red); }
+  .mic-btn.processing .mic-icon { color: var(--amber); }
+  .mic-btn.done .mic-icon { color: var(--green); }
+
+  /* Waveform bars */
+  .waveform {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 32px;
+    margin-bottom: 1.25rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .waveform.active { opacity: 1; }
+
+  .wave-bar {
+    width: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    height: 4px;
+    transition: height 0.1s;
+  }
+
+  /* Status */
+  .status-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-align: center;
+    min-height: 18px;
+    transition: color 0.2s;
+  }
+
+  .status-text.recording { color: var(--red); }
+  .status-text.processing { color: var(--amber); }
+  .status-text.done { color: var(--green); }
+  .status-text.error { color: var(--red); }
+
+  /* Transcript box */
+  .transcript-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    min-height: 80px;
+    display: none;
+    transition: border-color 0.3s;
+  }
+
+  .transcript-box.show { display: block; }
+  .transcript-box.active { border-color: var(--border-active); }
+
+  .transcript-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.625rem;
+  }
+
+  .transcript-text {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-primary);
+    line-height: 1.6;
+  }
+
+  /* Send button */
+  .send-btn {
+    width: 100%;
+    padding: 0.875rem;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    letter-spacing: 0.01em;
+    display: none;
+  }
+
+  .send-btn.show { display: block; }
+  .send-btn:hover { opacity: 0.88; }
+  .send-btn:active { transform: scale(0.98); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Response box */
+  .response-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-top: 1rem;
+    display: none;
+  }
+
+  .response-box.show { display: block; }
+
+  .response-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--green);
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .response-route {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+
+  .route-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--border-active);
+  }
+
+  .response-summary {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--text-mono);
+    line-height: 1.7;
+  }
+
+  /* Agent outputs */
+  .agent-outputs {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agent-output {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.875rem;
+  }
+
+  .agent-output-name {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 0.4rem;
+  }
+
+  .agent-output-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-mono);
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .footer-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+
+  .footer-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+  }
+
+  .footer-dot.live {
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="org-label">AI Organisation / Voice Command</div>
+    <h1>Talk to your<br><span>agents.</span></h1>
+    <p class="subtitle">Hold to record → transcribed by Whisper → routed to CEO agent</p>
+  </div>
+
+  <!-- Config -->
+  <div class="config-panel">
+    <div class="config-label">n8n webhook URL</div>
+    <input class="config-input" id="webhook-url" type="text"
+      placeholder="https://your-n8n.com/webhook/voice-ai-org"
+      value="">
+  </div>
+
+  <!-- Mic zone -->
+  <div class="mic-zone">
+    <div class="ring-wrap" id="ring-wrap">
+      <div class="ring ring-3"></div>
+      <div class="ring ring-2"></div>
+      <div class="ring ring-1"></div>
+      <button class="mic-btn" id="mic-btn" title="Hold to record">
+        <svg class="mic-icon" id="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8" y1="22" x2="16" y2="22"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="waveform" id="waveform">
+      <div class="wave-bar" id="b0"></div>
+      <div class="wave-bar" id="b1"></div>
+      <div class="wave-bar" id="b2"></div>
+      <div class="wave-bar" id="b3"></div>
+      <div class="wave-bar" id="b4"></div>
+      <div class="wave-bar" id="b5"></div>
+      <div class="wave-bar" id="b6"></div>
+      <div class="wave-bar" id="b7"></div>
+      <div class="wave-bar" id="b8"></div>
+      <div class="wave-bar" id="b9"></div>
+      <div class="wave-bar" id="b10"></div>
+      <div class="wave-bar" id="b11"></div>
+    </div>
+
+    <div class="status-text" id="status">Click to start recording</div>
+  </div>
+
+  <!-- Transcript -->
+  <div class="transcript-box" id="transcript-box">
+    <div class="transcript-label">Transcription</div>
+    <div class="transcript-text" id="transcript-text"></div>
+  </div>
+
+  <!-- Send -->
+  <button class="send-btn" id="send-btn">Dispatch to CEO Agent</button>
+
+  <!-- Response -->
+  <div class="response-box" id="response-box">
+    <div class="response-label">Org response</div>
+    <div class="response-route" id="response-route"></div>
+    <div class="response-summary" id="response-summary"></div>
+    <div class="agent-outputs" id="agent-outputs"></div>
+  </div>
+
+  <div class="footer">
+    <div class="footer-dot" id="status-dot"></div>
+    <div class="footer-text" id="footer-text">Ready — mic not active</div>
+  </div>
+
+</div>
+
+<script>
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let audioBlob = null;
+  let analyser = null;
+  let animFrame = null;
+  let stream = null;
+  let isRecording = false;
+
+  const micBtn = document.getElementById('mic-btn');
+  const ringWrap = document.getElementById('ring-wrap');
+  const statusEl = document.getElementById('status');
+  const waveform = document.getElementById('waveform');
+  const transcriptBox = document.getElementById('transcript-box');
+  const transcriptText = document.getElementById('transcript-text');
+  const sendBtn = document.getElementById('send-btn');
+  const responseBox = document.getElementById('response-box');
+  const statusDot = document.getElementById('status-dot');
+  const footerText = document.getElementById('footer-text');
+  const bars = Array.from({length: 12}, (_, i) => document.getElementById('b' + i));
+
+  function setState(s) {
+    const states = ['recording', 'processing', 'done', 'error'];
+    states.forEach(c => {
+      micBtn.classList.remove(c);
+      ringWrap.classList.remove(c);
+      statusEl.classList.remove(c);
+    });
+    if (s) {
+      micBtn.classList.add(s);
+      ringWrap.classList.add(s);
+      statusEl.classList.add(s);
+    }
+  }
+
+  function setFooter(text, live = false) {
+    footerText.textContent = text;
+    statusDot.className = 'footer-dot' + (live ? ' live' : '');
+  }
+
+  // Waveform animation
+  function animateWave() {
+    if (!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    bars.forEach((bar, i) => {
+      const idx = Math.floor(i * data.length / bars.length);
+      const h = 4 + (data[idx] / 255) * 28;
+      bar.style.height = h + 'px';
+    });
+    animFrame = requestAnimationFrame(animateWave);
+  }
+
+  function resetWave() {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    bars.forEach(b => b.style.height = '4px');
+  }
+
+  micBtn.addEventListener('click', async () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  });
+
+  async function startRecording() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+
+      audioChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = handleStop;
+      mediaRecorder.start();
+
+      isRecording = true;
+      setState('recording');
+      statusEl.textContent = 'Recording… click to stop';
+      waveform.classList.add('active');
+      animateWave();
+      setFooter('Recording active', true);
+
+      // Reset UI
+      transcriptBox.classList.remove('show', 'active');
+      sendBtn.classList.remove('show');
+      responseBox.classList.remove('show');
+    } catch (e) {
+      statusEl.textContent = 'Mic access denied';
+      setState('error');
+      setFooter('Error: ' + e.message);
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    isRecording = false;
+    resetWave();
+    waveform.classList.remove('active');
+    setState('processing');
+    statusEl.textContent = 'Processing audio…';
+    setFooter('Transcribing via Whisper…');
+  }
+
+  async function handleStop() {
+    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+    const webhookUrl = document.getElementById('webhook-url').value.trim();
+    if (!webhookUrl) {
+      // Demo mode — fake transcription
+      await new Promise(r => setTimeout(r, 1200));
+      const demos = [
+        'Write a product launch strategy and build an API integration for our new payments feature.',
+        'Create a sales outreach campaign and develop the backend spec for the lead scoring system.',
+        'Generate blog content for our Q3 product update and set up the data pipeline for tracking engagement.',
+      ];
+      showTranscript(demos[Math.floor(Math.random() * demos.length)]);
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+
+      const res = await fetch(webhookUrl + '/transcribe', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      showTranscript(data.transcript || data.text || 'No transcription returned');
+    } catch (e) {
+      setState('error');
+      statusEl.textContent = 'Transcription failed — ' + e.message;
+      setFooter('Error: check webhook URL');
+    }
+  }
+
+  function showTranscript(text) {
+    setState('done');
+    statusEl.textContent = 'Transcription complete';
+    transcriptText.textContent = text;
+    transcriptBox.classList.add('show', 'active');
+    sendBtn.classList.add('show');
+    setFooter('Ready to dispatch');
+  }
+
+  sendBtn.addEventListener('click', async () => {
+    const mission = transcriptText.textContent;
+    const webhookUrl = document.getElementById('webhook-url').value.trim();
+
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Dispatching…';
+    responseBox.classList.remove('show');
+
+    if (!webhookUrl) {
+      // Demo response
+      await new Promise(r => setTimeout(r, 1800));
+      showResponse({
+        route_activated: ['CTO', 'CMO'],
+        ceo_summary: 'Mission understood. Routing to technology and marketing streams simultaneously.',
+        outputs: {
+          engineering: '**Code/Architecture:** REST API with JWT auth\n**Jira Summary:** PROJ-42 — Payments API integration\n**Blockers:** None',
+          data: '(not activated)',
+          sales: '(not activated)',
+          content: '**Content:** Q3 launch blog post drafted\n**SEO Title:** Product Launch Q3 2026\n**Distribution:** LinkedIn, Blog, Email',
+          growth: '**Ad Copy:** "Ship faster. Pay smarter." / "The payments API your team actually wanted."'
+        }
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mission })
+      });
+      const data = await res.json();
+      showResponse(data);
+    } catch (e) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Dispatch to CEO Agent';
+      alert('Dispatch failed: ' + e.message);
+    }
+  });
+
+  function showResponse(data) {
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Dispatch to CEO Agent';
+
+    const routeEl = document.getElementById('response-route');
+    const summaryEl = document.getElementById('response-summary');
+    const outputsEl = document.getElementById('agent-outputs');
+
+    routeEl.innerHTML = '';
+    outputsEl.innerHTML = '';
+
+    (data.route_activated || []).forEach(r => {
+      const badge = document.createElement('span');
+      badge.className = 'route-badge';
+      badge.textContent = r;
+      routeEl.appendChild(badge);
+    });
+
+    summaryEl.textContent = data.ceo_summary || '';
+
+    const outputs = data.outputs || {};
+    const agentNames = {
+      engineering: 'Volt Build — Engineering',
+      data: 'Iris Analytics — Data',
+      sales: 'Rex Pipeline — Sales',
+      content: 'Pixel Story — Content',
+      growth: 'Flux Growth — Growth'
+    };
+
+    Object.entries(outputs).forEach(([key, val]) => {
+      if (!val || val === '(not activated)') return;
+      const div = document.createElement('div');
+      div.className = 'agent-output';
+      div.innerHTML = `<div class="agent-output-name">${agentNames[key] || key}</div><div class="agent-output-text">${val}</div>`;
+      outputsEl.appendChild(div);
+    });
+
+    responseBox.classList.add('show');
+    setFooter('Mission complete', true);
+  }
+</script>
+</body>
+</html>
