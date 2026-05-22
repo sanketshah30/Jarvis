@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+const model = "claude-sonnet-4-5";
 const defaultTimeoutMs = Number(process.env.ANTHROPIC_TIMEOUT_MS || 45000);
 
 export function createAnthropicClient() {
@@ -19,7 +19,7 @@ export async function runAgent({ client, system, prompt, label = "agent" }) {
     max_tokens: 1000,
     temperature: 0.2,
     system,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: prompt }]
   });
 
   const timeoutPromise = new Promise((_, reject) => {
