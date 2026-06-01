@@ -2,62 +2,23 @@
   "routing": [
     {
       "agent": "cto",
-      "keywords": [
-        "api",
-        "backend",
-        "frontend",
-        "engineering",
-        "architecture",
-        "data pipeline",
-        "dashboard",
-        "platform",
-        "software",
-        "build",
-        "technical"
-      ]
+      "keywords": ["api", "backend", "frontend", "engineering", "architecture", "data pipeline", "dashboard"]
     },
     {
       "agent": "coo",
-      "keywords": [
-        "sales",
-        "crm",
-        "operations",
-        "partner",
-        "pipeline",
-        "support process",
-        "administration",
-        "process"
-      ]
+      "keywords": ["sales", "crm", "operations", "partner", "pipeline", "support process"]
     },
     {
       "agent": "cmo",
-      "keywords": [
-        "marketing",
-        "seo",
-        "content",
-        "campaign",
-        "ad copy",
-        "growth",
-        "launch"
-      ]
+      "keywords": ["marketing", "seo", "content", "campaign", "ad copy", "growth"]
     },
     {
       "agent": "cfo",
-      "keywords": [
-        "budget",
-        "forecast",
-        "finance",
-        "cash flow",
-        "runway",
-        "cost",
-        "revenue",
-        "margin"
-      ]
+      "keywords": ["budget", "forecast", "finance", "cash flow", "runway", "cost", "revenue", "margin"]
     }
   ],
   "default_behavior": {
-    "route_all_executives_if_unclear": false,
-    "max_specialist_outputs_per_branch": 3,
-    "fallback_executives": ["cto", "coo", "cmo", "cfo"]
+    "route_all_executives_if_unclear": true,
+    "max_specialist_outputs_per_branch": 3
   }
 }
